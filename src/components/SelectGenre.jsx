@@ -1,45 +1,47 @@
-import React from 'react';
-import styled from 'styled-components';
-import { useDispatch, useSelector } from 'react-redux';
-import { setMovies } from '../store';
+import React, { useMemo } from "react";
+import styled from "styled-components";
 
-function SelectGenre({ genres = [], type }) {
-  const dispatch = useDispatch();
-  const genreList = useSelector((state) => state.genre.genres || []);
-
-
-
-  const allMovies = useSelector((state) => state.netflix.movies || []);
-
-  const onChange = async (e) => {
-    const id = e.target.value;
-    if (!id) {
-      // reset to full list
-      dispatch(setMovies(allMovies));
-      return;
+const normalizeOptions = (genres) =>
+  (Array.isArray(genres) ? genres : []).map((genre) => {
+    if (typeof genre === "string") {
+      return { value: genre, label: genre };
     }
 
-    // Filter client-side from already-loaded movies (Firestore)
-    const selectedGenre = genreList.find((g) => String(g.id) === String(id))?.name;
-    if (!selectedGenre) {
-      window.alert('Genre not found');
-      return;
+    if (genre && typeof genre === "object") {
+      const value =
+        genre.id ??
+        genre._id ??
+        genre.value ??
+        genre.name ??
+        genre.label ??
+        "";
+      const label = genre.name ?? genre.label ?? String(value);
+      return { value, label };
     }
-    const filtered = (Array.isArray(allMovies) ? allMovies : []).filter((m) => (m.genres || []).includes(selectedGenre));
-    if (!filtered || filtered.length === 0) {
-      window.alert(`No movies found for genre "${selectedGenre}"`);
-      return; // keep previous list
-    }
-    dispatch(setMovies(filtered));
-  };
+
+    const fallback = String(genre ?? "");
+    return { value: fallback, label: fallback };
+  });
+
+function SelectGenre({
+  genres = [],
+  value = "",
+  placeholder = "Browse by genre",
+  onChange,
+}) {
+  const options = useMemo(() => normalizeOptions(genres), [genres]);
 
   return (
-    <Select className="flex" onChange={onChange}>
-      <option value="">-- Select Genre --</option>
-      {(
-        (Array.isArray(genreList) && genreList.length > 0 ? genreList : (Array.isArray(genres) ? genres : []))
-      ).map((genre) => (
-        <option key={genre.id} value={genre.id}>{genre.name}</option>
+    <Select
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+      aria-label="Select genre"
+    >
+      <option value="">{placeholder}</option>
+      {options.map(({ value: optionValue, label }) => (
+        <option key={optionValue} value={optionValue}>
+          {label}
+        </option>
       ))}
     </Select>
   );
@@ -48,13 +50,19 @@ function SelectGenre({ genres = [], type }) {
 export default SelectGenre;
 
 const Select = styled.select`
-  margin: 2rem;
+  margin: 0;
   padding: 0.5rem 1rem;
   font-size: 1rem;
-  border-radius: 5px;
+  border-radius: 999px;
   border: none;
-  background-color: white;
-  color: black;
-  z-index: 10;
-  position: relative;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  backdrop-filter: blur(12px);
+  min-width: 220px;
+  appearance: none;
+  cursor: pointer;
+
+  option {
+    color: #111;
+  }
 `;

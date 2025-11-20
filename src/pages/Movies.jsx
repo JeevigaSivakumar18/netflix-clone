@@ -1,40 +1,32 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { getGenres, fetchMoviesFromFirestore } from "../store";
-import { onAuthStateChanged } from "firebase/auth";
-import { firebaseAuth } from "../utils/firebase-config";
-import Navbar from "../components/Navbar";
-import Slider from "../components/Slider";
 import styled from "styled-components";
-import NotAvailable from "../components/NotAvailable";
-import SelectGenre from "../components/SelectGenre";
 import { FaSearch } from "react-icons/fa";
 
+import Navbar from "../components/Navbar";
+import CardSlider from "../components/CardSlider";
+import NotAvailable from "../components/NotAvailable";
+import SelectGenre from "../components/SelectGenre";
+import { fetchAllGenres} from "../store/genreSlice";
+import {fetchHomepageSections} from "../store/netflixSlice";
+
 export default function Movies() {
+  const dispatch = useDispatch();
+
   const [isScrolled, setIsScrolled] = useState(false);
-  const [selectedGenre, setSelectedGenre] = useState("Top Picks");
+  const [selectedGenre, setSelectedGenre] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [inputHover, setInputHover] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
 
-  const movies = useSelector((state) => state.netflix.movies);
-  const genres = useSelector((state) => state.genre.genres);
+  const { movies, loading } = useSelector((state) => state.netflix);
+  const genres = useSelector((state) => state.genre.genres || []);
 
   useEffect(() => {
-    dispatch(getGenres());
-    dispatch(fetchMoviesFromFirestore());
+    dispatch(fetchAllGenres());
+    dispatch(fetchHomepageSections());
+
   }, [dispatch]);
-
-  useEffect(() => {
-    onAuthStateChanged(firebaseAuth, (currentUser) => {
-      if (!currentUser) navigate("/login");
-    });
-  }, [navigate]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY !== 0);
@@ -42,43 +34,46 @@ export default function Movies() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Search functionality
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setSearchResults([]);
-      setIsSearching(false);
-      return;
-    }
+  const normalizeGenres = (movie) => {
+    if (!movie) return [];
+    if (Array.isArray(movie.genre) && movie.genre.length) return movie.genre;
+    if (Array.isArray(movie.genres) && movie.genres.length) return movie.genres;
+    return [];
+  };
 
-    setIsSearching(true);
-    const filtered = movies.filter(movie =>
-      movie.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return movies.filter((movie) =>
+      movie.title?.toLowerCase().includes(query)
     );
-    setSearchResults(filtered);
-    setIsSearching(false);
-  }, [searchQuery, movies]);
+  }, [movies, searchQuery]);
 
-  // Filter movies based on selected genre
-  const filteredMovies =
-    selectedGenre === "Top Picks"
-      ? movies.slice(0, 10)
-      : movies.filter((m) => (m.genres || []).includes(selectedGenre));
+  const displayedGenres = useMemo(() => {
+    if (!selectedGenre || selectedGenre === "Top Picks") {
+      return genres;
+    }
+    return genres.includes(selectedGenre) ? [selectedGenre] : genres;
+  }, [genres, selectedGenre]);
 
-  // Determine which movies to display
-  const displayMovies = searchQuery.trim() ? searchResults : filteredMovies;
+  const hasSearch = searchQuery.trim().length > 0;
+  const topPicks = movies.slice(0, 10);
 
   return (
     <Container>
-      <Navbar isScrolled={isScrolled} />
+      <Navbar isscrolled={isScrolled.toString()} />
+
       <Header>
         <div className="header-left">
           <h1>
-            {searchQuery.trim() 
-              ? `Search Results for "${searchQuery}"` 
-              : selectedGenre
-            }
+            {hasSearch
+              ? `Search Results for "${searchQuery}"`
+              : selectedGenre && selectedGenre !== "Top Picks"
+              ? `${selectedGenre} Picks`
+              : "Browse Movies"}
           </h1>
-          {!searchQuery.trim() && (
+
+          {!hasSearch && (
             <SelectGenre
               genres={["Top Picks", ...genres]}
               onChange={(genre) => setSelectedGenre(genre)}
@@ -86,7 +81,7 @@ export default function Movies() {
             />
           )}
         </div>
-        
+
         <SearchContainer>
           <div className={`search ${showSearch ? "show" : ""}`}>
             <div className="search-wrapper">
@@ -117,26 +112,47 @@ export default function Movies() {
       </Header>
 
       <Content>
-        {isSearching ? (
-          <LoadingMessage>Searching movies...</LoadingMessage>
-        ) : displayMovies && displayMovies.length > 0 ? (
-          <Slider movies={displayMovies} />
-        ) : searchQuery.trim() ? (
-          <NotAvailable message={`No movies found for "${searchQuery}"`} />
+        {loading && movies.length === 0 ? (
+          <StatusBanner>Loading movies…</StatusBanner>
+        ) : hasSearch ? (
+          searchResults.length > 0 ? (
+            <CardSlider title="Search Results" movies={searchResults} />
+          ) : (
+            <NotAvailable message={`No movies found for "${searchQuery}"`} />
+          )
         ) : (
-          <NotAvailable message="No movies available for this genre." />
+          <>
+            <CardSlider title="Top Picks" movies={topPicks} />
+
+            {displayedGenres.map((genre) => {
+              const genreMovies = movies.filter((movie) =>
+                normalizeGenres(movie).includes(genre)
+              );
+
+              if (genreMovies.length === 0) {
+                return null;
+              }
+
+              return (
+                <CardSlider key={genre} title={genre} movies={genreMovies} />
+              );
+            })}
+          </>
         )}
       </Content>
     </Container>
   );
 }
 
-// Styled Components
+/* ========================= */
+/*      STYLED COMPONENTS    */
+/* ========================= */
+
 const Container = styled.div`
   background-color: #141414;
   min-height: 100vh;
   color: white;
-  padding-top: 68px; /* Account for fixed navbar */
+  padding-top: 68px;
 `;
 
 const Header = styled.div`
@@ -147,31 +163,10 @@ const Header = styled.div`
   flex-wrap: wrap;
   gap: 20px;
 
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    flex-wrap: wrap;
-  }
-
   h1 {
     font-size: 2rem;
-    margin: 0;
+    margin: 0 0 1rem 0;
     color: white;
-  }
-
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-    margin: 3rem 1rem 1rem 1rem;
-
-    .header-left {
-      gap: 15px;
-    }
-
-    h1 {
-      font-size: 1.5rem;
-    }
   }
 `;
 
@@ -181,7 +176,7 @@ const SearchContainer = styled.div`
 
   .search {
     position: relative;
-    
+
     .search-wrapper {
       display: flex;
       align-items: center;
@@ -207,10 +202,6 @@ const SearchContainer = styled.div`
       justify-content: center;
       font-size: 16px;
       transition: color 0.3s ease;
-
-      &:hover {
-        color: #b3b3b3;
-      }
     }
 
     input {
@@ -222,40 +213,22 @@ const SearchContainer = styled.div`
       width: 0;
       opacity: 0;
       transition: all 0.3s ease;
-      font-size: 14px;
-      min-height: 40px;
-
-      &::placeholder {
-        color: rgba(255, 255, 255, 0.7);
-      }
     }
 
     &.show input {
       width: 280px;
       opacity: 1;
-
-      @media (max-width: 768px) {
-        width: 200px;
-      }
-
-      @media (max-width: 480px) {
-        width: 150px;
-      }
     }
   }
 `;
 
 const Content = styled.div`
   margin: 2rem 2rem 4rem 2rem;
-
-  @media (max-width: 768px) {
-    margin: 1rem 1rem 2rem 1rem;
-  }
 `;
 
-const LoadingMessage = styled.div`
+const StatusBanner = styled.div`
   text-align: center;
-  font-size: 1.2rem;
+  padding: 4rem 1rem;
+  font-size: 1.25rem;
   color: #b3b3b3;
-  padding: 40px 0;
 `;

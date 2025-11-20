@@ -1,25 +1,35 @@
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { firebaseAuth } from "../utils/firebase-config";
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import styled from "styled-components";
+import { useAuth } from "../contexts/AuthContext";
 import BackgroundImage from "../components/BackgroundImage";
 import Header from "../components/Header";
 
 function Login() {
   const navigate = useNavigate();
+  const { login, error, clearError } = useAuth();
   const [formValues, setFormValues] = useState({
     email: "",
     password: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    clearError();
+    
     try {
       const { email, password } = formValues;
-      await signInWithEmailAndPassword(firebaseAuth, email, password);
-      navigate("/"); 
+      const result = await login({ email, password });
+      
+      if (result.success) {
+        navigate("/");
+      }
     } catch (err) {
-      console.log(err);
+      console.error("Login error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,25 +43,34 @@ function Login() {
             <div className="title">
               <h3>Login</h3>
             </div>
-            <input
-              type="email"
-              placeholder="Email Address"
-              name="email"
-              value={formValues.email}
-              onChange={(e) =>
-                setFormValues({ ...formValues, [e.target.name]: e.target.value })
-              }
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              name="password"
-              value={formValues.password}
-              onChange={(e) =>
-                setFormValues({ ...formValues, [e.target.name]: e.target.value })
-              }
-            />
-            <button onClick={handleLogin}>Log In</button>
+            {error && <div className="error-message">{error}</div>}
+            <form onSubmit={handleLogin}>
+              <input
+                type="email"
+                placeholder="Email Address"
+                name="email"
+                value={formValues.email}
+                onChange={(e) =>
+                  setFormValues({ ...formValues, [e.target.name]: e.target.value })
+                }
+                required
+                disabled={isLoading}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                name="password"
+                value={formValues.password}
+                onChange={(e) =>
+                  setFormValues({ ...formValues, [e.target.name]: e.target.value })
+                }
+                required
+                disabled={isLoading}
+              />
+              <button type="submit" disabled={isLoading}>
+                {isLoading ? "Signing In..." : "Log In"}
+              </button>
+            </form>
           </div>
         </div>
       </div>
@@ -124,6 +143,27 @@ const Container = styled.div`
   .title h3 {
     margin-bottom: 1.5rem;
     text-align: center;
+  }
+
+  .error-message {
+    background: rgba(255, 0, 0, 0.1);
+    color: #ff6b6b;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    text-align: center;
+    border: 1px solid rgba(255, 0, 0, 0.3);
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 `;
 

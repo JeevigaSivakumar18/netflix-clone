@@ -1,127 +1,521 @@
 import { useState, useEffect } from "react";
-import { Award, ArrowLeft, Trophy } from "lucide-react";
+import { ArrowLeft, Trophy, Star, Sparkles, Clock, Film } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/Button";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../utils/firebase-config";
+
 export default function MovieTrivia() {
   const navigate = useNavigate();
-  const [movies, setMovies] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
-    const fetchMovies = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "movies"));
-        const movieList = querySnapshot.docs.map(doc => doc.data());
-        setMovies(movieList);
-        generateQuestions(movieList);
-      } catch (error) {
-        console.error("Error fetching movies:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    const HARD_QUESTIONS = [
+      {
+        type: "year",
+        question: 'When was "The Matrix" released?',
+        answers: ["1999", "1998", "2000", "2001"],
+        correctAnswer: 0,
+      },
+      {
+        type: "plot",
+        question:
+          'Which movie has this plot: "A man leads a double life as a billionaire playboy and a high-tech superhero"?',
+        answers: ["Iron Man", "Batman Begins", "The Dark Knight", "Spider-Man"],
+        correctAnswer: 0,
+      },
+      {
+        type: "year",
+        question: 'When was "Pulp Fiction" released?',
+        answers: ["1994", "1992", "1995", "1990"],
+        correctAnswer: 0,
+      },
+      {
+        type: "plot",
+        question:
+          'Which movie has this plot: "A spaceship crew travels through a wormhole to save humanity"?',
+        answers: ["Interstellar", "Gravity", "The Martian", "Apollo 13"],
+        correctAnswer: 0,
+      },
+      {
+        type: "year",
+        question: 'When was "The Godfather" released?',
+        answers: ["1972", "1970", "1974", "1969"],
+        correctAnswer: 0,
+      },
+      {
+        type: "plot",
+        question:
+          'Which movie has this plot: "A man is wrongly imprisoned and plans an elaborate escape"?',
+        answers: [
+          "The Shawshank Redemption",
+          "Escape Plan",
+          "The Green Mile",
+          "The Count of Monte Cristo",
+        ],
+        correctAnswer: 0,
+      },
+    ];
 
-    fetchMovies();
+    setQuestions(HARD_QUESTIONS.sort(() => Math.random() - 0.5));
   }, []);
 
-  const generateQuestions = (movies) => {
-    const q = [];
-    const usedMovies = new Set();
-
-    // Release year questions
-    for (let i = 0; i < 5; i++) {
-      const movie = movies[Math.floor(Math.random() * movies.length)];
-      if (!usedMovies.has(movie.title)) {
-        usedMovies.add(movie.title);
-        const year = movie.release_date?.split("-")[0];
-        const answers = [year, String(Number(year)+1), String(Number(year)-1), String(Number(year)+2)].sort(() => Math.random()-0.5);
-        q.push({ question: `When was "${movie.title}" released?`, answers, correctAnswer: answers.indexOf(year) });
-      }
-    }
-
-    // Plot questions
-    for (let i = 0; i < 5; i++) {
-      const movie = movies[Math.floor(Math.random() * movies.length)];
-      if (!usedMovies.has(movie.title)) {
-        usedMovies.add(movie.title);
-        const wrongMovies = movies.filter(m => m.title !== movie.title).sort(() => Math.random()-0.5).slice(0,3);
-        const answers = [movie, ...wrongMovies].map(m=>m.title).sort(() => Math.random()-0.5);
-        q.push({ question: `Which movie has this plot: "${movie.overview}"`, answers, correctAnswer: answers.indexOf(movie.title) });
-      }
-    }
-
-    setQuestions(q);
-  };
-
   const handleAnswer = (answerIndex) => {
-    if (answerIndex === questions[currentQuestion].correctAnswer) setScore(score+1);
-    if (currentQuestion < questions.length-1) setCurrentQuestion(currentQuestion+1);
-    else setShowResult(true);
+    setSelectedAnswer(answerIndex);
+    setShowFeedback(true);
+
+    const isCorrect =
+      answerIndex === questions[currentQuestion].correctAnswer;
+
+    setTimeout(() => {
+      if (isCorrect) {
+        setScore((prev) => prev + 1);
+        setStreak((prev) => prev + 1);
+      } else {
+        setStreak(0);
+      }
+
+      if (currentQuestion < questions.length - 1) {
+        setCurrentQuestion((prev) => prev + 1);
+      } else {
+        setShowResult(true);
+      }
+
+      setSelectedAnswer(null);
+      setShowFeedback(false);
+    }, 1500);
   };
 
-  if (isLoading) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center space-y-4">
-        <Award className="h-16 w-16 animate-spin text-netflix-red mx-auto" />
-        <p className="text-white">Loading trivia questions...</p>
-      </div>
-    </div>
-  );
+  const getQuestionIcon = (type) => {
+    switch (type) {
+      case "year":
+        return <Clock className="h-5 w-5" />;
+      case "plot":
+        return <Film className="h-5 w-5" />;
+      default:
+        return <Star className="h-5 w-5" />;
+    }
+  };
+
+  const getAnswerButtonStyle = (index) => {
+    if (!showFeedback) {
+      return "answer-btn";
+    }
+
+    const isCorrect = index === questions[currentQuestion].correctAnswer;
+    const isSelected = selectedAnswer === index;
+
+    if (isCorrect) return "answer-correct";
+    if (isSelected && !isCorrect) return "answer-wrong";
+    return "answer-disabled";
+  };
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6">
-        <ArrowLeft className="h-4 w-4 mr-2" /> Back
-      </Button>
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Movie Trivia Challenge</h1>
-          <p className="text-gray-400">Test your knowledge of popular movies!</p>
-        </div>
+    <div className="trivia-page">
+      <div className="floating-background"></div>
 
-        <div className="bg-netflix-surface/80 backdrop-blur-sm p-8 rounded-2xl border border-white/10">
-          {!showResult ? (
-            <>
-              <div className="flex justify-between items-center mb-6">
-                <div className="text-lg text-white">Question {currentQuestion+1} of {questions.length}</div>
-                <div className="text-netflix-red font-semibold">Score: {score}</div>
-              </div>
+      <div className="relative z-10 p-6">
+        <div className="max-w-6xl mx-auto">
+          <button
+  onClick={() => navigate("/games")}
+  className="back-btn"
+  style={{ position: "relative", zIndex: 9999 }}
+>
+  <ArrowLeft className="h-4 w-4" />
+  Back to Browse
+</button>
 
-              <div className="text-xl text-white mb-8">{questions[currentQuestion].question}</div>
+          <div className="title-wrapper">
+            <Sparkles className="title-icon" />
+            <h1 className="title-text">CINEMATIC TRIVIA</h1>
+            <Sparkles className="title-icon" />
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {questions[currentQuestion].answers.map((answer, idx) => (
-                  <Button key={idx} variant="outline" className="p-4 text-left hover:bg-white/10" onClick={()=>handleAnswer(idx)}>
-                    {answer}
+          <p className="subtitle">Test your movie knowledge like a true cinephile!</p>
+
+          <div className="game-container">
+            {!showResult && questions.length > 0 ? (
+              <>
+                <div className="stats-bar">
+                  <div className="stat-box">
+                    <span className="stat-label">QUESTION</span>
+                    <span className="stat-value">
+                      {currentQuestion + 1} / {questions.length}
+                    </span>
+                  </div>
+
+                  <div className="stat-box">
+                    <span className="stat-label">SCORE</span>
+                    <span className="stat-value score">{score}</span>
+                  </div>
+
+                  {streak > 0 && (
+                    <div className="stat-box streak-box">
+                      <span className="stat-label">STREAK</span>
+                      <span className="stat-value streak">{streak}🔥</span>
+                    </div>
+                  )}
+
+                  <div className="type-badge">
+                    {getQuestionIcon(questions[currentQuestion]?.type)}
+                    <span>{questions[currentQuestion]?.type} Question</span>
+                  </div>
+                </div>
+
+                <div className="question-card">
+                  {questions[currentQuestion]?.question}
+                </div>
+
+                <div className="answers-grid">
+                  {questions[currentQuestion]?.answers.map((answer, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleAnswer(idx)}
+                      disabled={showFeedback}
+                      className={`answer ${getAnswerButtonStyle(idx)}`}
+                    >
+                      <div className={`answer-bullet ${selectedAnswer === idx ? "active" : ""}`}>
+                        {String.fromCharCode(65 + idx)}
+                      </div>
+                      {answer}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="progress-section">
+                  <div className="progress-labels">
+                    <span>Progress</span>
+                    <span>
+                      {Math.round(
+                        ((currentQuestion + 1) / questions.length) * 100
+                      )}
+                      %
+                    </span>
+                  </div>
+
+                  <div className="progress-bar">
+                    <div
+                      className="progress-fill"
+                      style={{
+                        width: `${((currentQuestion + 1) / questions.length) * 100}%`,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </>
+            ) : showResult ? (
+              <div className="text-center max-w-2xl mx-auto">
+                <Trophy className="result-icon" />
+
+                <h2 className="result-title">Trivia Complete!</h2>
+
+                <div className="result-card">
+                  <div className="result-score">
+                    {score}
+                    <span className="total">/{questions.length}</span>
+                  </div>
+
+                  <div className="result-message">
+                    {score === questions.length
+                      ? "🏆 PERFECT SCORE! You're a cinema legend!"
+                      : score >= questions.length * 0.8
+                      ? "🎬 Outstanding! True movie buff!"
+                      : score >= questions.length * 0.6
+                      ? "⭐ Great job! Solid movie knowledge!"
+                      : "🎥 Good start! Keep watching and learning!"}
+                  </div>
+
+                  {streak > 3 && (
+                    <div className="streak-note">
+                      🔥 Amazing {streak}-answer streak!
+                    </div>
+                  )}
+                </div>
+
+                <div className="result-buttons">
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(-1)}
+                    className="exit-btn"
+                  >
+                    Exit Game
                   </Button>
-                ))}
+
+                  <Button
+                    className="play-again-btn"
+                    onClick={() => {
+                      setCurrentQuestion(0);
+                      setScore(0);
+                      setShowResult(false);
+                      setStreak(0);
+                      setQuestions((prev) =>
+                        [...prev].sort(() => Math.random() - 0.5)
+                      );
+                    }}
+                  >
+                    🎯 Play Again
+                  </Button>
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="text-center space-y-6">
-              <Trophy className="h-16 w-16 mx-auto text-yellow-500 animate-bounce" />
-              <h3 className="text-2xl font-bold text-white">You scored {score} out of {questions.length}!</h3>
-              <p className="text-gray-300">
-                {score === questions.length ? "Perfect score! You're a movie expert! 🏆" :
-                score > questions.length/2 ? "Great job! You really know your movies! 🎬" :
-                "Keep watching to learn more about movies! 🎥"}
-              </p>
-              <div className="flex justify-center gap-4">
-                <Button variant="outline" onClick={()=>navigate(-1)}>Exit Game</Button>
-                <Button className="bg-netflix-red hover:bg-red-700" onClick={()=>{
-                  setCurrentQuestion(0); setScore(0); setShowResult(false); generateQuestions(movies);
-                }}>Play Again</Button>
-              </div>
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
       </div>
+
+      {/* NETFLIX STYLE CSS */}
+      <style>{`
+        .trivia-page {
+  min-height: 100vh;
+  background: #000; /* Netflix black */
+  color: white;
+  font-family: Netflix Sans, Arial;
+  position: relative;
+  overflow: hidden;
+}
+
+.floating-background {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(229,9,20,0.25), transparent),
+              radial-gradient(circle at bottom, rgba(229,9,20,0.15), transparent);
+  z-index: 0;
+}
+
+
+         .back-btn {
+  background: rgba(0,0,0,0.7);
+  border: 1px solid #e50914;
+  padding: 8px 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: 0.25s;
+  color: white;
+  position: relative;
+  z-index: 50;
+}
+.back-btn:hover {
+  background: #e50914;
+  transform: scale(1.05);
+}
+
+
+        .title-wrapper {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 12px;
+          margin-top: 20px;
+        }
+        .title-text {
+          font-size: 54px;
+          font-weight: 900;
+          background: linear-gradient(to right, #e50914, orange, yellow);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+        .title-icon {
+          color: #e50914;
+          width: 40px;
+          height: 40px;
+        }
+        .subtitle {
+          text-align: center;
+          color: #ccc;
+          margin-bottom: 30px;
+        }
+
+        .game-container {
+          background: rgba(20,20,20,0.8);
+          padding: 32px;
+          border-radius: 24px;
+          border: 1px solid rgba(229,9,20,0.3);
+          box-shadow: 0 0 25px rgba(229,9,20,0.2);
+        }
+
+        .stats-bar {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 30px;
+        }
+        .stat-box {
+          background: rgba(0,0,0,0.6);
+          padding: 12px 20px;
+          border-radius: 14px;
+          border: 1px solid rgba(229,9,20,0.3);
+        }
+        .stat-label {
+          font-size: 12px;
+          color: #aaa;
+        }
+        .stat-value {
+          font-size: 20px;
+          font-weight: 700;
+        }
+        .score {
+          color: gold;
+        }
+        .streak-box {
+          border-color: orange;
+        }
+        .streak {
+          color: orange;
+        }
+
+        .type-badge {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(0,0,0,0.6);
+          padding: 8px 16px;
+          border-radius: 20px;
+          border: 1px solid #555;
+        }
+
+        .question-card {
+          background: rgba(0,0,0,0.5);
+          border: 1px solid #555;
+          padding: 24px;
+          border-radius: 16px;
+          font-size: 24px;
+          text-align: center;
+          margin-bottom: 30px;
+        }
+
+        .answers-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          gap: 14px;
+        }
+
+        /* Answer Buttons - Default */
+        .answer {
+          padding: 18px;
+          border-radius: 16px;
+          border: 2px solid #444;
+          background: rgba(40,40,40,0.7);
+          font-size: 18px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          transition: 0.25s;
+        }
+        .answer:hover {
+          background: rgba(60,60,60,0.9);
+          border-color: #e50914;
+          transform: scale(1.03);
+        }
+
+        .answer-bullet {
+          background: #555;
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          font-weight: bold;
+        }
+
+        /* Answer States */
+        .answer-correct {
+          background: rgba(0,200,50,0.3) !important;
+          border-color: #00ff87 !important;
+          transform: scale(1.05);
+        }
+        .answer-wrong {
+          background: rgba(255,0,0,0.3) !important;
+          border-color: #ff4444 !important;
+        }
+        .answer-disabled {
+          opacity: 0.4;
+        }
+
+        .progress-section {
+          margin-top: 25px;
+        }
+        .progress-labels {
+          display: flex;
+          justify-content: space-between;
+          color: #aaa;
+          font-size: 14px;
+          margin-bottom: 6px;
+        }
+        .progress-bar {
+          width: 100%;
+          height: 8px;
+          background: #444;
+          border-radius: 6px;
+        }
+        .progress-fill {
+          height: 100%;
+          border-radius: 6px;
+          background: linear-gradient(to right, #e50914, orange);
+          transition: width 0.4s;
+        }
+
+        .result-icon {
+          width: 90px;
+          height: 90px;
+          color: gold;
+          margin: 20px auto;
+          animation: bounce 1.2s infinite;
+        }
+
+        .result-title {
+          font-size: 40px;
+          font-weight: 900;
+          background: linear-gradient(to right, gold, orange);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          margin-bottom: 16px;
+        }
+
+        .result-card {
+          background: rgba(0,0,0,0.4);
+          padding: 24px;
+          border-radius: 20px;
+          border: 1px solid gold;
+          margin-bottom: 30px;
+        }
+
+        .result-score {
+          font-size: 60px;
+          font-weight: 900;
+          color: gold;
+        }
+        .total {
+          font-size: 32px;
+          color: white;
+        }
+
+        .exit-btn {
+          border-color: #666 !important;
+          color: #ccc !important;
+        }
+        .play-again-btn {
+          background: linear-gradient(to right, #e50914, orange);
+          color: white;
+          font-weight: bold;
+          transition: 0.25s;
+        }
+        .play-again-btn:hover {
+          transform: scale(1.05);
+        }
+
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -7,34 +7,50 @@ import PropTypes from "prop-types";
 function Slider({ movies = [], loading = false, error = null }) {
   if (!Array.isArray(movies)) movies = [];
 
-  // Deduplicate movies by tmdbId
-  const uniqueMovies = Array.from(new Map(movies.map(m => [m.tmdbId, m])).values());
+  const genreMap = {};
 
-  // Define categories exactly as in your seed data
-  const categories = {
-    Trending: [],
-    "New Releases": [],
-    Blockbusters: [],
-    Action: [],
-    Epics: [],
-  };
-
-  // Assign each movie to its category
-  uniqueMovies.forEach(movie => {
-    const cat = movie.category;
-    if (categories[cat]) {
-      categories[cat].push(movie);
+  movies.forEach(movie => {
+    if (!movie) return; // ✅ Safety check
+    
+    // ✅ CORRECTED: Use 'genre' and handle both array and string formats
+    let movieGenres = [];
+    
+    if (Array.isArray(movie.genre)) {
+      movieGenres = movie.genre;
+    } else if (typeof movie.genre === 'string') {
+      movieGenres = [movie.genre];
+    } else if (movie.genres && Array.isArray(movie.genres)) {
+      // Fallback: some movies might use 'genres'
+      movieGenres = movie.genres;
     }
+    
+    // ✅ Add to genre map
+    movieGenres.forEach(g => {
+      if (g && typeof g === 'string') {
+        if (!genreMap[g]) genreMap[g] = [];
+        genreMap[g].push(movie);
+      }
+    });
   });
+
+  // ✅ Get popular genres with most movies
+  const popularGenres = Object.entries(genreMap)
+    .filter(([_, movies]) => movies.length >= 3) // Only genres with 3+ movies
+    .sort(([_, a], [__, b]) => b.length - a.length) // Sort by movie count
+    .slice(0, 5); // Top 5 genres
 
   return (
     <>
       {loading && <Loading />}
       {error && <ErrorMessage message={error} />}
 
-      {Object.entries(categories).map(([title, arr]) =>
-        arr.length > 0 ? <CardSlider key={title} title={title} movies={arr} /> : null
-      )}
+      {popularGenres.map(([genre, movieArray]) => (
+        <CardSlider 
+          key={genre} 
+          title={`${genre} Movies`} 
+          movies={movieArray} 
+        />
+      ))}
     </>
   );
 }

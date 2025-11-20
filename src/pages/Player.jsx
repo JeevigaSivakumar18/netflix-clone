@@ -1,34 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "../utils/firebase-config";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchHomepageSections } from "../store/netflixSlice";
 
 function Player() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const { homepageSections, loading } = useSelector((state) => state.netflix);
   const [movie, setMovie] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchMovie = async () => {
-      try {
-        const docRef = doc(db, "movies", id);
-        const docSnap = await getDoc(docRef);
+    if (Object.keys(homepageSections).length === 0 && !loading) {
+      dispatch(fetchHomepageSections());
+    }
+  }, [dispatch, homepageSections, loading]);
 
-        if (docSnap.exists()) {
-          setMovie({ id: docSnap.id, ...docSnap.data() });
-        } else {
-          console.error("No such movie!");
-        }
-      } catch (error) {
-        console.error("Error fetching movie:", error);
-      } finally {
-        setLoading(false);
+  useEffect(() => {
+    const movies = Object.values(homepageSections).flat();
+    if (movies.length > 0) {
+      const foundMovie = movies.find(m => m._id === id || m.id === id);
+      if (foundMovie) {
+        setMovie(foundMovie);
+      } else {
+        navigate("/");
       }
-    };
-
-    fetchMovie();
-  }, [id]);
+    }
+  }, [homepageSections, id, navigate]);
 
   if (loading) {
     return <h2 style={{ color: "white" }}>Loading movie...</h2>;
@@ -48,7 +46,6 @@ function Player() {
         minHeight: "100vh",
       }}
     >
-      {/* Back to home */}
       <button
         onClick={() => navigate("/")}
         style={{

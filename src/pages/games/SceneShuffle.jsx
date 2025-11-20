@@ -1,114 +1,48 @@
 import { useState, useEffect } from "react";
 import { Dice1, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../../components/ui/Button";
-import { collection, getDocs, doc, getDoc } from "firebase/firestore";
-import { db, firebaseAuth } from "../../utils/firebase-config";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchFeaturedMovies } from "../../store/netflixSlice";
 import styled from "styled-components";
 
 export default function SceneShuffle() {
   const navigate = useNavigate();
-  const [movies, setMovies] = useState([]);
+  const dispatch = useDispatch();
+  const { movies: apiMovies, loading } = useSelector((state) => state.netflix);
   const [currentMovie, setCurrentMovie] = useState(null);
   const [scenes, setScenes] = useState([]);
   const [shuffledScenes, setShuffledScenes] = useState([]);
   const [selectedScenes, setSelectedScenes] = useState([]);
   const [score, setScore] = useState(0);
   const [showResult, setShowResult] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchMoviesWithScenes = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const moviesSnapshot = await getDocs(collection(db, "movies"));
-        const movieList = [];
-        
-        // Fetch each movie and its scenes
-        for (const docSnapshot of moviesSnapshot.docs) {
-          const movieData = docSnapshot.data();
-          const movieId = docSnapshot.id;
-          
-          // Try to fetch scenes from subcollection
-          try {
-            const scenesSnapshot = await getDocs(collection(db, "movies", movieId, "scenes"));
-            const sceneList = scenesSnapshot.docs.map(sceneDoc => ({
-              id: sceneDoc.id,
-              ...sceneDoc.data()
-            }));
+    if (apiMovies.length === 0 && !loading) {
+      dispatch(fetchFeaturedMovies());
 
-            // If no scenes in subcollection, check if scenes array exists in movie document
-            if (sceneList.length === 0 && movieData.scenes && Array.isArray(movieData.scenes)) {
-              movieList.push({
-                id: movieId,
-                ...movieData,
-                scenes: movieData.scenes.map((scene, index) => ({
-                  id: `scene-${index}`,
-                  image: scene.image || movieData.backdrop_path,
-                  description: scene.description || `Scene ${index + 1}`,
-                  order: scene.order || index
-                }))
-              });
-            } else if (sceneList.length > 0) {
-              movieList.push({
-                id: movieId,
-                ...movieData,
-                scenes: sceneList.map(scene => ({
-                  id: scene.id,
-                  image: scene.image || movieData.backdrop_path,
-                  description: scene.description || `Scene ${scene.order || 1}`,
-                  order: scene.order || 1
-                }))
-              });
-            } else {
-              // If no scenes found, create default scenes
-              movieList.push({
-                id: movieId,
-                ...movieData,
-                scenes: [
-                  { id: 1, image: movieData.backdrop_path, description: "Opening Scene", order: 1 },
-                  { id: 2, image: movieData.backdrop_path, description: "Plot Development", order: 2 },
-                  { id: 3, image: movieData.backdrop_path, description: "Climax", order: 3 },
-                  { id: 4, image: movieData.backdrop_path, description: "Resolution", order: 4 },
-                ]
-              });
-            }
-          } catch (sceneError) {
-            console.warn(`No scenes subcollection for movie ${movieId}:`, sceneError);
-            // Use default scenes if subcollection doesn't exist
-            movieList.push({
-              id: movieId,
-              ...movieData,
-              scenes: [
-                { id: 1, image: movieData.backdrop_path, description: "Opening Scene", order: 1 },
-                { id: 2, image: movieData.backdrop_path, description: "Plot Development", order: 2 },
-                { id: 3, image: movieData.backdrop_path, description: "Climax", order: 3 },
-                { id: 4, image: movieData.backdrop_path, description: "Resolution", order: 4 },
-              ]
-            });
-          }
-        }
+    }
+  }, [dispatch, apiMovies.length, loading]);
 
-        setMovies(movieList);
-        
-        if (movieList.length > 0) {
-          selectRandomMovie(movieList);
-        } else {
-          setError("No movies found in database");
-        }
-      } catch (error) {
-        console.error("Error fetching movies:", error);
-        setError("Failed to load movies. Please try again.");
-      } finally {
-        setIsLoading(false);
+  useEffect(() => {
+    if (apiMovies.length > 0) {
+      const moviesWithScenes = apiMovies.map(movie => ({
+        ...movie,
+        scenes: [
+          { id: 1, image: movie.backdrop || movie.poster, description: "Opening Scene", order: 1 },
+          { id: 2, image: movie.backdrop || movie.poster, description: "Plot Development", order: 2 },
+          { id: 3, image: movie.backdrop || movie.poster, description: "Climax", order: 3 },
+          { id: 4, image: movie.backdrop || movie.poster, description: "Resolution", order: 4 },
+        ]
+      }));
+      
+      if (moviesWithScenes.length > 0) {
+        selectRandomMovie(moviesWithScenes);
+      } else {
+        setError("No movies found in database");
       }
-    };
-
-    fetchMoviesWithScenes();
-  }, []);
+    }
+  }, [apiMovies]);
 
   const selectRandomMovie = (movieList) => {
     if (movieList.length === 0) return;
@@ -119,21 +53,8 @@ export default function SceneShuffle() {
     // Use the actual scenes from the movie data
     const movieScenes = movie.scenes || [];
     
-    // If movie has fewer than 4 scenes, pad with default scenes
-    const scenesToUse = movieScenes.length >= 4 ? 
-      movieScenes.slice(0, 4) : 
-      [
-        ...movieScenes,
-        ...Array.from({ length: 4 - movieScenes.length }, (_, i) => ({
-          id: `default-${i}`,
-          image: movie.backdrop_path,
-          description: `Scene ${movieScenes.length + i + 1}`,
-          order: movieScenes.length + i + 1
-        }))
-      ];
-
     // Sort scenes by order to get correct sequence
-    const correctOrderScenes = [...scenesToUse].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const correctOrderScenes = [...movieScenes].sort((a, b) => (a.order || 0) - (b.order || 0));
     
     setScenes(correctOrderScenes);
     setShuffledScenes([...correctOrderScenes].sort(() => Math.random() - 0.5));
@@ -156,7 +77,7 @@ export default function SceneShuffle() {
     }
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <LoadingContainer>
         <div className="loading-content">
@@ -297,7 +218,15 @@ export default function SceneShuffle() {
                 <ExitButton onClick={() => navigate(-1)}>
                   Exit Game
                 </ExitButton>
-                <NextButton onClick={() => selectRandomMovie(movies)}>
+                <NextButton onClick={() => selectRandomMovie(apiMovies.map(movie => ({
+                  ...movie,
+                  scenes: [
+                    { id: 1, image: movie.backdrop || movie.poster, description: "Opening Scene", order: 1 },
+                    { id: 2, image: movie.backdrop || movie.poster, description: "Plot Development", order: 2 },
+                    { id: 3, image: movie.backdrop || movie.poster, description: "Climax", order: 3 },
+                    { id: 4, image: movie.backdrop || movie.poster, description: "Resolution", order: 4 },
+                  ]
+                })))}>
                   Next Movie
                 </NextButton>
               </ButtonGroup>

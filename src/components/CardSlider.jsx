@@ -3,7 +3,13 @@ import styled from "styled-components";
 import Card from "./Card";
 
 export default function CardSlider({ title = "", movies = [], onAddToList }) {
-  if (!movies || movies.length === 0) return null;
+  // ✅ ADD DEBUGGING
+  console.log(`🎬 CardSlider "${title}":`, movies?.length || 0, "movies");
+  
+  if (!movies || movies.length === 0) {
+    console.log(`❌ CardSlider "${title}": No movies to display`);
+    return null;
+  }
 
   return (
     <Section>
@@ -11,7 +17,7 @@ export default function CardSlider({ title = "", movies = [], onAddToList }) {
       <SliderContainer>
         {movies.map((movie) => (
           <Card
-            key={movie.id} // use Firestore doc id (unique)
+            key={movie._id || movie.id} 
             movieData={movie}
             onAddToList={onAddToList}
           />
@@ -21,6 +27,7 @@ export default function CardSlider({ title = "", movies = [], onAddToList }) {
   );
 }
 
+// ... styled components remain the same
 const Section = styled.div`
   margin: 1.5rem 0;
   .slider-title {

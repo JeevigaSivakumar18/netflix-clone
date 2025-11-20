@@ -1,71 +1,104 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../utils/firebase-config";
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 
-const initialState = {
-  movies: [],
-  likedMovies: [],
-  loading: false,
-  error: null,
-};
+const API_BASE_URL = 'http://localhost:5001/api';
 
-// Fetch all movie documents from the 'movies' collection in Firestore
-export const fetchMoviesFromFirestore = createAsyncThunk(
-  "netflix/fetchFromFirestore",
-  async (_, thunkAPI) => {
+// Fetch featured movies
+export const fetchFeaturedMovies = createAsyncThunk(
+  'netflix/fetchFeaturedMovies',
+  async (_, { rejectWithValue }) => {
     try {
-      const col = collection(db, "movies");
-      const snapshot = await getDocs(col);
-      const movies = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      // debug: size and first few elements
-      console.debug("fetchMoviesFromFirestore -> total:", snapshot.size);
-      if (movies.length > 0) console.debug("fetchMoviesFromFirestore -> sample:", movies.slice(0, 3));
-      return movies;
-    } catch (err) {
-      console.error("fetchMoviesFromFirestore error:", err?.message || err);
-      // propagate error for rejected action (so UI can show it)
-      return thunkAPI.rejectWithValue(err?.message || "Failed to fetch movies");
+      const response = await axios.get(`${API_BASE_URL}/movies/featured/list`);
+      return response.data.movies;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch featured movies');
+    }
+  }
+);
+
+// Fetch homepage sections
+export const fetchHomepageSections = createAsyncThunk(
+  'netflix/fetchHomepageSections',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/movies/homepage/sections`);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch homepage sections');
     }
   }
 );
 
 const netflixSlice = createSlice({
-  name: "netflix",
-  initialState,
+  name: 'netflix',
+  initialState: {
+    featured: [],
+    homepageSections: {},
+    loading: false,
+    error: null,
+    movies: []   // This MUST contain all movies
+  },
   reducers: {
-    addToLikedMovies: (state, action) => {
-      if (!state.likedMovies.some((movie) => movie.id === action.payload.id)) {
-        state.likedMovies.push(action.payload);
-      }
-    },
-    setMovies: (state, action) => {
-      state.movies = action.payload || [];
-    },
-    removeFromLikedMovies: (state, action) => {
-      state.likedMovies = state.likedMovies.filter(
-        (movie) => movie.id !== action.payload
-      );
-    },
+    clearError: (state) => {
+      state.error = null;
+    }
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchMoviesFromFirestore.pending, (state) => {
+
+      // FEATURED
+      .addCase(fetchFeaturedMovies.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchMoviesFromFirestore.fulfilled, (state, action) => {
+      .addCase(fetchFeaturedMovies.fulfilled, (state, action) => {
         state.loading = false;
-        state.movies = action.payload;
+        state.featured = action.payload;
+
+        // Also store into movies list
+        // Deduplicate by _id in case featured overlaps with other lists
+        const map = new Map();
+        action.payload.forEach(m => map.set(String(m._id || m.id || m.imdbId), m));
+        state.movies = Array.from(map.values());
       })
-      .addCase(fetchMoviesFromFirestore.rejected, (state, action) => {
+      .addCase(fetchFeaturedMovies.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload || action.error?.message || "Failed to load movies";
-        state.movies = [];
+        state.error = action.payload;
+      })
+
+      // HOMEPAGE SECTIONS
+      .addCase(fetchHomepageSections.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchHomepageSections.fulfilled, (state, action) => {
+        state.loading = false;
+        state.homepageSections = action.payload;
+
+        // 🔥 Collect all movies into a single array
+        let combinedMovies = [];
+
+        Object.values(action.payload).forEach(sectionMovies => {
+          if (Array.isArray(sectionMovies)) {
+            combinedMovies = [...combinedMovies, ...sectionMovies];
+          }
+        });
+
+        // Deduplicate movies by id to avoid duplicate React keys when rendering lists
+        const unique = new Map();
+        combinedMovies.forEach(m => {
+          const id = String(m._id || m.id || m.imdbId);
+          if (!unique.has(id)) unique.set(id, m);
+        });
+
+        state.movies = Array.from(unique.values());
+      })
+      .addCase(fetchHomepageSections.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
-  },
+  }
 });
 
-export const { addToLikedMovies, removeFromLikedMovies, setMovies } =
-  netflixSlice.actions;
-
+export const { clearError } = netflixSlice.actions;
 export default netflixSlice.reducer;

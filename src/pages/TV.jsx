@@ -1,35 +1,25 @@
 // src/pages/Tv.jsx
 import React, { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../utils/firebase-config";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchHomepageSections } from "../store/netflixSlice";
+
 import Navbar from "../components/Navbar";
 import styled from "styled-components";
 import { FaPlay, FaPlus, FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
 function Tv() {
-  const [tvShows, setTvShows] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { movies, loading } = useSelector((state) => state.netflix);
   const [hoveredShow, setHoveredShow] = useState(null);
 
   useEffect(() => {
-    const fetchTvShows = async () => {
-      try {
-        const tvCollection = collection(db, "tv");
-        const tvSnapshot = await getDocs(tvCollection);
-        const tvList = tvSnapshot.docs.map((doc) => ({
-          ...doc.data(),
-          rating: Math.floor(Math.random() * 3) + 7.5 // Mock rating
-        }));
-        setTvShows(tvList);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching TV shows:", err);
-        setLoading(false);
-      }
-    };
+    if (movies.length === 0 && !loading) {
+      dispatch(fetchHomepageSections());
+    }
+  }, [dispatch, movies.length, loading]);
 
-    fetchTvShows();
-  }, []);
+  // Filter movies to show only TV shows (you might want to add a type field to distinguish)
+  const tvShows = movies.filter(movie => movie.genre?.includes('Drama') || movie.genre?.includes('Comedy'));
 
   const groupByGenre = () => {
     const grouped = {};

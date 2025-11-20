@@ -1,53 +1,48 @@
-import { 
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
- } from "firebase/auth";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { firebaseAuth } from "../utils/firebase-config";
-import React, { useState , useEffect } from "react";
 import styled from "styled-components";
+import { useAuth } from "../contexts/AuthContext";
 import BackgroundImage from "../components/BackgroundImage";
 import Header from "../components/Header";
 
-import { signOut } from "firebase/auth";
-
 function Signup() {
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [formValues, setFormValues] = useState({
     email: "",
     password: "",
+    name: "",
   });
-  const Navigate = useNavigate();
+  const navigate = useNavigate();
+  const { register, error, clearError, isAuthenticated } = useAuth();
 
   useEffect(() => {
-  signOut(firebaseAuth);  // 👈 force logout when visiting signup
-}, []);
+    if (isAuthenticated) {
+      navigate("/");
+    }
+  }, [isAuthenticated, navigate]);
 
-  const handleSignIn = async () => {
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    clearError();
+    
     try {
-      const { email, password } = formValues;
-      await createUserWithEmailAndPassword(firebaseAuth, email, password);
-      console.log("User signed up successfully!");
+      const { email, password, name } = formValues;
+      const result = await register({ email, password, name });
+      
+      if (result.success) {
+        navigate("/");
+      }
     } catch (err) {
-      console.log("Firebase error:", err.message);
+      console.error("Signup error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
-   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-      if (currentUser) {
-        Navigate("/");  // user is logged in → go home
-      } else {
-        setLoading(false);  // user not logged in → stop loading, show signup page
-      }
-    });
-    return () => unsubscribe();
-  }, [Navigate]);
-
-  if (loading) return null;
 
   return (
-    <Container showPassword={showPassword}>
+    <Container $showPassword={showPassword}>
       <BackgroundImage />
       <div className="content">
         <Header login={true} />
@@ -59,6 +54,7 @@ function Signup() {
               Ready to watch? Enter your email to create or restart membership
             </h6>
           </div>
+          {error && <div className="error-message">{error}</div>}
           <div className="form">
             <input
               type="email"
@@ -68,26 +64,58 @@ function Signup() {
               onChange={(e) =>
                 setFormValues({ ...formValues, [e.target.name]: e.target.value })
               }
+              required
+              disabled={isLoading}
             />
             {showPassword && (
-              <input
-                type="password"
-                placeholder="Password"
-                name="password"
-                value={formValues.password}
-                onChange={(e) =>
-                  setFormValues({
-                    ...formValues,
-                    [e.target.name]: e.target.value,
-                  })
-                }
-              />
+              <>
+                <input
+                  type="text"
+                  placeholder="Full Name (optional)"
+                  name="name"
+                  value={formValues.name}
+                  onChange={(e) =>
+                    setFormValues({
+                      ...formValues,
+                      [e.target.name]: e.target.value,
+                    })
+                  }
+                  disabled={isLoading}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  name="password"
+                  value={formValues.password}
+                  onChange={(e) =>
+                    setFormValues({
+                      ...formValues,
+                      [e.target.name]: e.target.value,
+                    })
+                  }
+                  required
+                  minLength={6}
+                  disabled={isLoading}
+                />
+              </>
             )}
             {!showPassword && (
-              <button onClick={() => setShowPassword(true)}>Get Started</button>
+              <button 
+                onClick={() => setShowPassword(true)}
+                disabled={isLoading}
+              >
+                Get Started
+              </button>
             )}
           </div>
-          <button onClick={handleSignIn}>Sign up</button>
+          {showPassword && (
+            <button 
+              onClick={handleSignUp}
+              disabled={isLoading}
+            >
+              {isLoading ? "Creating Account..." : "Sign up"}
+            </button>
+          )}
         </div>
       </div>
     </Container>
@@ -132,6 +160,22 @@ const Container = styled.div`
     color: white;
     cursor: pointer;
     font-size: 1rem;
+  }
+
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .error-message {
+    background: rgba(255, 0, 0, 0.1);
+    color: #ff6b6b;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    text-align: center;
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    max-width: 400px;
   }
 `;
 

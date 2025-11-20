@@ -1,111 +1,54 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/logo.png";
-import { FaPowerOff, FaCaretDown } from "react-icons/fa";
-import { firebaseAuth } from "../utils/firebase-config";
-import { signOut, onAuthStateChanged } from "firebase/auth";
+import { useAuth } from "../contexts/AuthContext";
 
 function Navbar({ isScrolled }) {
   const links = [
     { name: "Home", link: "/" },
-    //{ name: "TV Shows", link: "/tv" },
     { name: "Movies", link: "/movies" },
     { name: "My List", link: "/mylist" },
     { name: "Feeling Lucky", link: "/feeling-lucky" },
-  ];
+    { name: "Games", link: "/games" },
+    { name: "Profile", link: "/profile" },
 
-  const games = [
-    { name: "Scene Shuffle", link: "/scene-shuffle" },
-    { name: "Guess the Movie", link: "/guess-the-movie" },
-    { name: "Movie Trivia", link: "/movie-trivia" },
-    { name: "Random Scene", link: "/random-scene" },
   ];
 
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [toast, setToast] = useState(null);
-  const [gamesOpen, setGamesOpen] = useState(false);
-  
-  const dropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setGamesOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  React.useEffect(() => {
-    onAuthStateChanged(firebaseAuth, (currentUser) => {
-      if (!currentUser) navigate("/login");
-    });
-  }, [navigate]);
-
-  const toggleGamesDropdown = () => {
-    setGamesOpen(!gamesOpen);
-  };
-
-  const handleGamesLinkClick = () => {
-    setGamesOpen(false);
-  };
 
   return (
-    <Container>
+    <Container isscrolled={isScrolled}>
       <nav className={`flex ${isScrolled ? "scrolled" : ""}`}>
-        <div className="left flex a-center">
-          <div className="brand flex a-center j-center">
+        <div className="left">
+          <div className="brand">
             <img src={logo} alt="Netflix Logo" />
           </div>
-          <ul className="links flex">
+          <ul className="links">
             {links.map(({ name, link }) => (
               <li key={name}>
                 <Link to={link}>{name}</Link>
               </li>
             ))}
-
-            {/* Games Dropdown */}
-            <li className="games-dropdown" ref={dropdownRef}>
-              <span 
-                className="games-title" 
-                onClick={toggleGamesDropdown}
-              >
-                Games <FaCaretDown className={`dropdown-arrow ${gamesOpen ? "open" : ""}`} />
-              </span>
-              {gamesOpen && (
-                <ul className="dropdown">
-                  {games.map(({ name, link }) => (
-                    <li key={name}>
-                      <Link to={link} onClick={handleGamesLinkClick}>{name}</Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
           </ul>
         </div>
 
-        <div className="right flex a-center">
+        <div className="right">
           <button
             className="logout-btn"
             onClick={() => {
-              signOut(firebaseAuth);
+              logout();
+              navigate("/login");
             }}
           >
-            <FaPowerOff />
+            Logout
           </button>
         </div>
 
         {toast && (
-          <div className={`toast ${toast.type}`}>
-            {toast.message}
-          </div>
+          <div className={`toast ${toast.type}`}>{toast.message}</div>
         )}
       </nav>
     </Container>
@@ -114,125 +57,51 @@ function Navbar({ isScrolled }) {
 
 export default Navbar;
 
+
 const Container = styled.div`
   nav {
     position: fixed;
     top: 0;
-    height: 68px;
     width: 100%;
+    height: 68px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 4%;
+    padding: 0 3rem;
     z-index: 10;
+    box-sizing: border-box;
     transition: background-color 0.3s ease-in-out;
-    background: ${props => props.isScrolled ? 'rgba(0, 0, 0, 0.9)' : 'transparent'};
-    background-image: ${props => props.isScrolled ? 'none' : 'linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 10%, rgba(0, 0, 0, 0))'};
-  }
-
-  .scrolled {
-    background: rgba(0, 0, 0, 0.9);
+    background: ${(props) =>
+      props.isScrolled ? "rgba(0,0,0,0.9)" : "transparent"};
+    background-image: ${(props) =>
+      props.isScrolled
+        ? "none"
+        : "linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)"};
   }
 
   .left {
     display: flex;
     align-items: center;
+    gap: 40px;
     flex: 1;
   }
 
-  .brand {
-    margin-right: 35px;
-    
-    img {
-      height: 30px;
-      width: auto;
-    }
+  .brand img {
+    height: 32px;
   }
 
   .links {
-    list-style: none;
     display: flex;
-    gap: 25px;
-    margin: 0;
-    padding: 0;
-    align-items: center;
+    gap: 28px;
 
-    li {
-      position: relative;
+    li a {
+      color: #e5e5e5;
+      font-size: 16px;
+      text-decoration: none;
+      font-weight: 500;
 
-      a, .games-title {
-        color: #e5e5e5;
-        text-decoration: none;
-        font-size: 16px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: color 0.3s ease-in-out;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 0;
-      }
-
-      &:hover a, &:hover .games-title {
+      &:hover {
         color: #b3b3b3;
-      }
-    }
-
-    .games-dropdown {
-      position: relative;
-      
-      .dropdown-arrow {
-        font-size: 14px;
-        transition: transform 0.3s ease;
-        
-        &.open {
-          transform: rotate(180deg);
-        }
-      }
-
-      .dropdown {
-        position: absolute;
-        top: 100%;
-        left: -10px;
-        background: rgba(0, 0, 0, 0.9);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        list-style: none;
-        padding: 10px 0;
-        margin-top: 12px;
-        min-width: 200px;
-        display: flex;
-        flex-direction: column;
-        gap: 0;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-        z-index: 1000;
-
-        &::before {
-          content: '';
-          position: absolute;
-          top: -6px;
-          left: 20px;
-          width: 0;
-          height: 0;
-          border-left: 6px solid transparent;
-          border-right: 6px solid transparent;
-          border-bottom: 6px solid rgba(255, 255, 255, 0.1);
-        }
-
-        li a {
-          padding: 10px 18px;
-          width: 100%;
-          display: block;
-          font-size: 15px;
-          color: #e5e5e5;
-          white-space: nowrap;
-          text-decoration: none;
-
-          &:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-          }
-        }
       }
     }
   }
@@ -240,22 +109,25 @@ const Container = styled.div`
   .right {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
+    flex: 1;
+    min-width: 120px;
+    margin-left: auto;
   }
 
   .logout-btn {
-    background: transparent;
+    background: #e50914;
     border: none;
     color: white;
     cursor: pointer;
-    padding: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    transition: color 0.3s ease;
+    padding: 8px 16px;
+    font-size: 15px;
+    border-radius: 4px;
+    font-weight: bold;
+    transition: 0.3s;
 
     &:hover {
-      color: #b3b3b3;
+      background: #f6121d;
     }
   }
 
@@ -267,7 +139,6 @@ const Container = styled.div`
     border-radius: 4px;
     color: white;
     z-index: 1000;
-    font-size: 16px;
 
     &.success {
       background: #2ecc71;

@@ -1,129 +1,105 @@
 import styled from "styled-components";
 import React, { useState, useEffect } from "react";
-import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "../utils/firebase-config";
+import { useDispatch, useSelector } from "react-redux";
+import { addToMyList, removeFromMyList, checkMyListStatus } from "../store/myListSlice";
+import { Play, Plus, X, Info } from "lucide-react";
 
-export default function Card({ movieData, onAddToList }) {
-  const [details, setDetails] = useState(null);
+export default function Card({ movieData, onAddToList, onRemoveFromList }) {
+  const dispatch = useDispatch();
   const [inMyList, setInMyList] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
-  // ✅ Check if movie is in My List
+  // Check if movie is in My List
   useEffect(() => {
-    const checkIfInList = async () => {
-      const user = auth.currentUser;
-      if (!user || !movieData?.tmdbId) return;
-
-      const movieRef = doc(db, "users", user.uid, "myList", movieData.tmdbId.toString());
-      const docSnap = await getDoc(movieRef);
-      setInMyList(docSnap.exists());
-    };
-
-    checkIfInList();
-  }, [movieData]);
-
-  // ✅ Toggle add/remove from list
-  const handleToggleList = async () => {
-    const user = auth.currentUser;
-    if (!user) {
-      alert("Please log in first!");
-      return;
+    if (movieData?._id || movieData?.id) {
+      dispatch(checkMyListStatus(movieData._id || movieData.id)).then((result) => {
+        if (result.payload) {
+          setInMyList(result.payload.inList);
+        }
+      });
     }
+  }, [dispatch, movieData]);
 
-    const movieRef = doc(db, "users", user.uid, "myList", movieData.tmdbId.toString());
-
-    try {
-      if (inMyList) {
-        await deleteDoc(movieRef);
-        setInMyList(false);
-        alert(`${movieData.title} removed from My List`);
-      } else {
-        await setDoc(movieRef, movieData);
-        setInMyList(true);
-        alert(`${movieData.title} added to My List`);
-      }
-    } catch (err) {
-      console.error("Error updating My List:", err);
+  // Toggle add/remove from list
+  const handleToggleList = async (e) => {
+    e.stopPropagation();
+    
+    if (inMyList) {
+      dispatch(removeFromMyList(movieData._id || movieData.id));
+      setInMyList(false);
+    } else {
+      dispatch(addToMyList(movieData._id || movieData.id));
+      setInMyList(true);
     }
   };
 
-  // ✅ Fetch TMDB details
-  useEffect(() => {
-    if (!movieData?.tmdbId) return;
-
-    const fetchMovieDetails = async () => {
-      try {
-        const apiKey = "7b73a00bcdb4776989a1ccc50f41887a"; // replace with your TMDB API key
-        const res = await fetch(
-          `https://api.themoviedb.org/3/movie/${movieData.tmdbId}?api_key=${apiKey}&append_to_response=videos`
-        );
-        if (!res.ok) {
-          console.warn("TMDB fetch failed for", movieData.tmdbId, res.status);
-          return;
-        }
-        const data = await res.json();
-        setDetails(data);
-      } catch (err) {
-        console.error("Error fetching TMDB data:", err);
-      }
-    };
-
-    fetchMovieDetails();
-  }, [movieData?.tmdbId]);
-
   if (!movieData) return null;
 
-  // ✅ Poster path logic
-  const poster = details?.poster_path
-    ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
-    : movieData.poster || movieData.backdrop || "/placeholder_poster.png";
-
-  // ✅ Trailer key logic
-  const trailerKey =
-    details?.videos?.results?.find((v) => v.type === "Trailer" && v.site === "YouTube")?.key ||
-    (movieData.video && movieData.video.length <= 20 ? movieData.video : null);
-
+  const poster = movieData.poster || movieData.backdrop || "/placeholder_poster.png";
   const title = movieData.title || movieData.name || "Untitled";
+  const genres = movieData.genre || [];
+  const description = movieData.description || "";
+  const year = movieData.year || "";
 
   return (
-    <CardContainer>
-      <Poster src={poster} alt={title} />
-      <Info>
-        <Title>{title}</Title>
-        <Genres>{(movieData.genres || []).join(" • ")}</Genres>
-        <Description>{movieData.description}</Description>
-        <Buttons>
-          <AddButton onClick={handleToggleList}>
-            {inMyList ? "❌ Remove" : "➕ Add"}
-          </AddButton>
-          {trailerKey ? (
-            <PlayButton
-              onClick={() =>
-                window.open(`https://www.youtube.com/watch?v=${trailerKey}`, "_blank")
-              }
-            >
-              ▶ Play
+    <CardContainer 
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      $isHovered={isHovered}
+    >
+      <PosterContainer>
+        <Poster src={poster} alt={title} />
+        <Overlay $isHovered={isHovered}>
+          <ActionButtons>
+            <PlayButton>
+              <Play size={20} />
             </PlayButton>
-          ) : (
-            <PlayButton disabled>▶ Play</PlayButton>
-          )}
-          <MoreInfoButton>ℹ More Info</MoreInfoButton>
-        </Buttons>
-      </Info>
+            <AddButton onClick={handleToggleList} $inList={inMyList}>
+              {inMyList ? <X size={20} /> : <Plus size={20} />}
+            </AddButton>
+            <InfoButton>
+              <Info size={20} />
+            </InfoButton>
+          </ActionButtons>
+        </Overlay>
+      </PosterContainer>
+      <MovieInfo>
+        <Title>{title}</Title>
+        <Meta>
+          <Year>{year}</Year>
+          {genres.length > 0 && <Genres>{genres.slice(0, 2).join(" • ")}</Genres>}
+        </Meta>
+        {isHovered && (
+          <Description>{description}</Description>
+        )}
+      </MovieInfo>
     </CardContainer>
   );
 }
 
 /* ---------------- Styled Components ---------------- */
 const CardContainer = styled.div`
-  background: #1c1c1c;
-  border-radius: 8px;
-  overflow: hidden;
   width: 220px;
   margin: 0.5rem;
   display: flex;
   flex-direction: column;
   color: white;
   flex: 0 0 auto;
+  cursor: pointer;
+  transition: transform 0.3s ease, z-index 0.3s ease;
+  position: relative;
+  z-index: ${props => props.$isHovered ? 10 : 1};
+
+  &:hover {
+    transform: scale(1.05);
+  }
+`;
+
+const PosterContainer = styled.div`
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 `;
 
 const Poster = styled.img`
@@ -131,64 +107,134 @@ const Poster = styled.img`
   height: 330px;
   object-fit: cover;
   background: #222;
+  transition: filter 0.3s ease;
 `;
 
-const Info = styled.div`
-  padding: 0.5rem;
+const Overlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
   display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  opacity: ${props => props.$isHovered ? 1 : 0};
+  transition: opacity 0.3s ease;
 `;
 
-const Title = styled.h3`
-  font-size: 1rem;
-  margin: 0;
-`;
-
-const Genres = styled.span`
-  font-size: 0.75rem;
-  color: #b3b3b3;
-`;
-
-const Description = styled.p`
-  font-size: 0.8rem;
-  color: #b3b3b3;
-  height: 3em;
-  overflow: hidden;
-`;
-
-const Buttons = styled.div`
+const ActionButtons = styled.div`
   display: flex;
   gap: 0.5rem;
-  margin-top: auto;
-`;
-
-const AddButton = styled.button`
-  background: #e50914;
-  border: none;
-  color: white;
-  font-size: 1rem;
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
+  align-items: center;
 `;
 
 const PlayButton = styled.button`
-  background: #fff;
+  background: white;
   border: none;
-  color: #000;
-  font-weight: 600;
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
+  color: black;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: #e50914;
+    color: white;
+    transform: scale(1.1);
+  }
 `;
 
-const MoreInfoButton = styled.button`
-  background: #6d6d6d;
-  border: none;
+const AddButton = styled.button`
+  background: ${props => props.$inList ? '#e50914' : 'rgba(42, 42, 42, 0.6)'};
+  border: 2px solid rgba(255, 255, 255, 0.5);
   color: white;
-  font-weight: 500;
-  border-radius: 4px;
-  padding: 0.3rem 0.6rem;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: #e50914;
+    border-color: white;
+    transform: scale(1.1);
+  }
+`;
+
+const InfoButton = styled.button`
+  background: rgba(42, 42, 42, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: white;
+    color: black;
+    transform: scale(1.1);
+  }
+`;
+
+const MovieInfo = styled.div`
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const Title = styled.h3`
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.2;
+  color: white;
+`;
+
+const Meta = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+`;
+
+const Year = styled.span`
+  color: #b3b3b3;
+  font-weight: 400;
+`;
+
+const Genres = styled.span`
+  color: #b3b3b3;
+  font-weight: 400;
+`;
+
+const Description = styled.p`
+  font-size: 0.75rem;
+  color: #b3b3b3;
+  line-height: 1.4;
+  margin: 0.5rem 0 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 `;
